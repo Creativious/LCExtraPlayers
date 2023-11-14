@@ -21,47 +21,41 @@ namespace LCExtraPlayers
             {
                 if (type.FullName == "StartOfRound")
                 {
-                    customLogToConsole("Patching StartOfRound");
                     PatchStartOfRound(type);
-                    customLogToConsole("Patched StartOfRound");
 
                 }
                 else if (type.FullName == "DressGirlAI")
                 {
-                    customLogToConsole("Patching DressGirlAI");
                     PatchDressGirlAI(type);
-                    customLogToConsole("Patched DressGirlAI");
 
                 }
                 else if (type.FullName == "EnemyAI")
                 {
-                    customLogToConsole("Patching EnemyAI");
                     PatchEnemyAI(type);
-                    customLogToConsole("Patched EnemyAI");
                 }
                 else if (type.FullName == "GameNetworkManager")
                 {
-                    customLogToConsole("Patching GameNetworkManager");
                     PatchGameNetworkManager(type);
-                    customLogToConsole("Patched GameNetworkManager");
                 }
                 else if (type.FullName == "QuickMenuManager")
                 {
-                    customLogToConsole("Patching QuickMenuManager");
                     PatchQuickMenuManager(type);
-                    customLogToConsole("Patched QuickMenuManager");
                 }
                 else if (type.FullName == "RoundManager")
                 {
-                    customLogToConsole("Patching RoundManager");
                     PatchRoundManager(type);
-                    customLogToConsole("Patched RoundManager");
                 }
                 else if (type.FullName == "SpringManAI")
                 {
-                    customLogToConsole("Patching SpringManAI");
                     PatchSpringManAI(type);
-                    customLogToConsole("Patched SpringManAI");
+                }
+                else if (type.FullName == "HUDManager")
+                {
+                    //PatchHUDManager(type, assembly);
+                }
+                else if (type.Name == "PlayerControllerB")
+                {
+                    PatchPlayerControllerB(type);
                 }
             }
             
@@ -224,6 +218,36 @@ namespace LCExtraPlayers
                 }
             }
         }
+        public static void PatchHUDManager(TypeDefinition HUDManager, AssemblyDefinition assembly)
+        {
+            if (HUDManager == null)
+            {
+                return;
+            }
+            foreach (MethodDefinition method in  HUDManager.Methods)
+            {
+                if (method.Name == "AddChatMessage")
+                {
+                    var processor = method.Body.GetILProcessor();
+                    Instruction afterInstruction = method.Body.Instructions[77];
+                    Instruction[] instructionsToAdd = new Instruction[100];
+                    TypeDefinition StartOfRoundDefinition = assembly.MainModule.Types.First(td => td.Name == "StartOfRound");
+                    TypeDefinition PlayerControllerBDefinition = assembly.MainModule.Types.First(td => td.Name == "PlayerControllerB");
+                    FieldDefinition PlayerUsernameDefinition = PlayerControllerBDefinition.Fields.First(fd => fd.Name == "playerUsername");
+                    MethodDefinition StartOfRoundGetInstanceDefinition = StartOfRoundDefinition.Methods.First(md => md.Name == "get_Instance");
+                    FieldDefinition AllPlayerScriptsFieldDefinition = StartOfRoundDefinition.Fields.First(fd => fd.Name == "allPlayerScripts");
+                    instructionsToAdd.Append(processor.Create(OpCodes.Dup));
+                    instructionsToAdd.Append(processor.Create(OpCodes.Ldstr, "[playerNum4]"));
+                    instructionsToAdd.Append(processor.Create(OpCodes.Call, StartOfRoundGetInstanceDefinition));
+                    instructionsToAdd.Append(processor.Create(OpCodes.Ldfld, AllPlayerScriptsFieldDefinition));
+                    instructionsToAdd.Append(processor.Create(OpCodes.Ldc_I4_4));
+                    instructionsToAdd.Append(processor.Create(OpCodes.Ldelem_Ref));
+                    instructionsToAdd.Append(processor.Create(OpCodes.Ldfld, PlayerUsernameDefinition));
+
+                    
+                }
+            }
+        }
         public static void PatchSpringManAI(TypeDefinition SpringManAI)
         {
             if (SpringManAI == null)
@@ -245,6 +269,37 @@ namespace LCExtraPlayers
                     var processor = method.Body.GetILProcessor();
 
                     Instruction targetInstruction = method.Body.Instructions[110];
+                    Instruction newInstruction = processor.Create(OpCodes.Ldc_I4_S, ((sbyte)10));
+                    processor.Replace(targetInstruction, newInstruction);
+                }
+            }
+        }
+        public static void PatchPlayerControllerB(TypeDefinition PlayerControllerB)
+        {
+            if (PlayerControllerB == null)
+            {
+                return;
+            }
+            foreach(MethodDefinition method in PlayerControllerB.Methods)
+            {
+                if (method.Name == "SpectateNextPlayer")
+                {
+                    var processor = method.Body.GetILProcessor();
+                    Instruction targetInstruction = method.Body.Instructions[59];
+                    Instruction newInstruction = processor.Create(OpCodes.Ldc_I4_S, ((sbyte)10));
+                    processor.Replace(targetInstruction, newInstruction);
+                }
+                else if (method.Name == "SendNewPlayerValuesServerRpc")
+                {
+                    var processor = method.Body.GetILProcessor();
+                    Instruction targetInstruction = method.Body.Instructions[111];
+                    Instruction newInstruction = processor.Create(OpCodes.Ldc_I4_S, ((sbyte)10));
+                    processor.Replace(targetInstruction, newInstruction);
+                }
+                else if (method.Name == ".ctor")
+                {
+                    var processor = method.Body.GetILProcessor();
+                    Instruction targetInstruction = method.Body.Instructions[31];
                     Instruction newInstruction = processor.Create(OpCodes.Ldc_I4_S, ((sbyte)10));
                     processor.Replace(targetInstruction, newInstruction);
                 }
