@@ -17,7 +17,6 @@ namespace LCExtraPlayers
         // Patches the assemblies
         public static void Patch(AssemblyDefinition assembly)
         {
-            TypeDefinition StartOfRound = null;
             foreach (TypeDefinition type in assembly.MainModule.Types)
             {
                 if (type.FullName == "StartOfRound")
@@ -178,6 +177,14 @@ namespace LCExtraPlayers
                     Instruction newInstruction = processor.Create(OpCodes.Ldc_I4_S, ((sbyte)10));
                     processor.Replace(targetInstruction, newInstruction);
 
+                }
+                else if (method.Name == "ConnectionApproval")
+                {
+                    var processor = method.Body.GetILProcessor();
+
+                    Instruction targetInstruction = method.Body.Instructions[51];
+                    Instruction newInstruction = processor.Create(OpCodes.Ldc_I4_S, ((sbyte)10));
+                    processor.Replace(targetInstruction, newInstruction);
                 }
             }
         }
