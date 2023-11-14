@@ -66,7 +66,7 @@ namespace LCExtraPlayers
                 }
             }
             
-            assembly.Write("new.dll");
+            //assembly.Write("new.dll"); // Creates a new compiled version of the assembly
             // Patcher code here
         }
 
