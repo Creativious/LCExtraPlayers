@@ -16,6 +16,7 @@ namespace LCExtraPlayers
     public static class Patcher  
     {
         public static IEnumerable<string> TargetDLLs { get; } = new[] { "Assembly-CSharp.dll" };
+        public static bool oldPlanetHasTime;
 
         // Patches the assemblies
         public static void Patch(AssemblyDefinition assembly)
@@ -75,6 +76,8 @@ namespace LCExtraPlayers
             
             MethodInfo resizeMethodInfo = typeof(Patcher).GetMethod("ResizeArray");
             MethodReference resizeArrayMethodReference = assembly.MainModule.ImportReference(resizeMethodInfo);
+            FieldInfo oldPlanetHasTimeFieldInfo = typeof(Patcher).GetField("oldPlanetHasTime");
+            FieldReference oldPlanetHasTimeFieldReference = assembly.MainModule.ImportReference(oldPlanetHasTimeFieldInfo);
             
             // Handling Methods
             foreach(MethodDefinition method in StartOfRound.Methods)
@@ -124,8 +127,7 @@ namespace LCExtraPlayers
                     var processor = method.Body.GetILProcessor();
                     Instruction startAfterInstruction = method.Body.Instructions[method.Body.Instructions.Count - 2];
                     Instruction[] instructions = new Instruction[105];
-                    FieldDefinition allPlayerObjectsDefinition = StartOfRound.Fields.First(fd => fd.Name == "allPlayerObjects");
-                    FieldReference allPlayerObjectsReference = assembly.MainModule.ImportReference(allPlayerObjectsDefinition);
+                    FieldReference allPlayerObjectsReference = getFieldReferenceFromNameAndType("allPlayerObjects", StartOfRound, assembly);
                     Instruction[] allPlayerObjectsInstructions = getInstructionsForResizing(processor, resizeArrayMethodReference, allPlayerObjectsReference);
                     int i = 0;
                     foreach(Instruction instruction in allPlayerObjectsInstructions)
@@ -134,8 +136,7 @@ namespace LCExtraPlayers
                         i++;
                     }
                     
-                    FieldDefinition allPlayerScriptsDefinition = StartOfRound.Fields.First(fd => fd.Name == "allPlayerScripts");
-                    FieldReference allPlayerScriptsReference = assembly.MainModule.ImportReference(allPlayerScriptsDefinition);
+                    FieldReference allPlayerScriptsReference = getFieldReferenceFromNameAndType("allPlayerScripts", StartOfRound, assembly);
                     Instruction[] allPlayerScriptsInstructions = getInstructionsForResizing(processor, resizeArrayMethodReference, allPlayerScriptsReference);
                     foreach (Instruction instruction in allPlayerScriptsInstructions)
                     {
@@ -143,8 +144,7 @@ namespace LCExtraPlayers
                         i++;
                     }
 
-                    FieldDefinition playerSpawnPositionsDefinition = StartOfRound.Fields.First(fd => fd.Name == "playerSpawnPositions");
-                    FieldReference playerSpawnPositionsReference = assembly.MainModule.ImportReference(playerSpawnPositionsDefinition);
+                    FieldReference playerSpawnPositionsReference = getFieldReferenceFromNameAndType("playerSpawnPositions", StartOfRound, assembly);
                     Instruction[] playerSpawnPositionsInstructions = getInstructionsForResizing(processor, resizeArrayMethodReference, playerSpawnPositionsReference);
                     foreach (Instruction instruction in playerSpawnPositionsInstructions)
                     {
@@ -153,10 +153,9 @@ namespace LCExtraPlayers
                     }
 
                     FieldDefinition gameStatsDefinition = StartOfRound.Fields.First(fd => fd.Name == "gameStats");
-                    FieldReference gameStatsReference = assembly.MainModule.ImportReference(gameStatsDefinition);
+                    FieldReference gameStatsReference = getFieldReferenceFromNameAndType("gameStats", StartOfRound, assembly);
                     TypeDefinition EndOfGameStatsDefinition = gameStatsDefinition.FieldType.Resolve();
-                    FieldDefinition allPlayerStatsDefinition = EndOfGameStatsDefinition.Fields.First(fd => fd.Name == "allPlayerStats");
-                    FieldReference allPlayerStatsReference = assembly.MainModule.ImportReference(allPlayerStatsDefinition);
+                    FieldReference allPlayerStatsReference = getFieldReferenceFromNameAndType("allPlayerStats", EndOfGameStatsDefinition, assembly);
                     Instruction[] allPlayerStatsInstructions = getInstructionsForResizing(processor, resizeArrayMethodReference, allPlayerStatsReference);
                     int x = 0;
                     foreach (Instruction instruction in allPlayerStatsInstructions)
@@ -194,13 +193,16 @@ namespace LCExtraPlayers
                         }
                     }
 
-                    
-
-                    logMethodInstructions(method);
-
                 }
+                
             } 
 
+        }
+        public static FieldReference getFieldReferenceFromNameAndType(String name, TypeDefinition type, AssemblyDefinition assembly)
+        {
+            FieldDefinition fieldDefinition = type.Fields.First(fd => fd.Name == name);
+            FieldReference fieldReference = assembly.MainModule.ImportReference(fieldDefinition);
+            return fieldReference;
         }
         public static Instruction[] getInstructionsForResizing(ILProcessor processor, MethodReference resizeReference, FieldReference arrayReference)
         {
@@ -433,6 +435,8 @@ namespace LCExtraPlayers
             {
                 return;
             }
+            MethodInfo resizeMethodInfo = typeof(Patcher).GetMethod("ResizeArray");
+            MethodReference resizeArrayMethodReference = assembly.MainModule.ImportReference(resizeMethodInfo);
             foreach (MethodDefinition method in HUDManager.Methods)
             {
                 if (method.Name == "SyncAllPlayerLevelsServerRpc")
@@ -443,6 +447,111 @@ namespace LCExtraPlayers
                     processor.Replace(targetInstruction, newInstruction);
                     targetInstruction = method.Body.Instructions[106];
                     processor.Replace(targetInstruction, newInstruction);
+                }
+                else if (method.Name == "Awake")
+                {
+                    var processor = method.Body.GetILProcessor();
+                    FieldReference playerLevelsFieldReference = getFieldReferenceFromNameAndType("playerLevels", HUDManager, assembly);
+                    TypeDefinition PlayerLevelDefinition = assembly.MainModule.Types.First(td => td.Name == "PlayerLevel");
+                    FieldReference playerLevelCtorReference = getFieldReferenceFromNameAndType(".ctor", PlayerLevelDefinition, assembly); // make a new method for methods reference instead, cuz I hate this :(
+                    Instruction firstInstruction = method.Body.Instructions.First();
+
+                    Instruction[] playerLevelsResizeInstructions = getInstructionsForResizing(processor, resizeArrayMethodReference, playerLevelsFieldReference); // 5 instructions
+                    Instruction[] instructions = new Instruction[35];
+                    int i = 0;
+                    instructions[i] = playerLevelsResizeInstructions[i];
+                    i++;
+                    instructions[i] = playerLevelsResizeInstructions[i];
+                    i++;
+                    instructions[i] = playerLevelsResizeInstructions[i];
+                    i++;
+                    instructions[i] = playerLevelsResizeInstructions[i];
+                    i++;
+                    instructions[i] = playerLevelsResizeInstructions[i];
+                    i++;
+
+                    instructions[i] = processor.Create(OpCodes.Ldarg_0);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldfld, playerLevelsFieldReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldc_I4_4);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Newobj, playerLevelCtorReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Stelem_Ref);
+                    i++;
+
+                    instructions[i] = processor.Create(OpCodes.Ldarg_0);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldfld, playerLevelsFieldReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldc_I4_5);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Newobj, playerLevelCtorReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Stelem_Ref);
+                    i++;
+
+                    instructions[i] = processor.Create(OpCodes.Ldarg_0);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldfld, playerLevelsFieldReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldc_I4_6);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Newobj, playerLevelCtorReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Stelem_Ref);
+                    i++;
+
+                    instructions[i] = processor.Create(OpCodes.Ldarg_0);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldfld, playerLevelsFieldReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldc_I4_7);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Newobj, playerLevelCtorReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Stelem_Ref);
+                    i++;
+
+                    instructions[i] = processor.Create(OpCodes.Ldarg_0);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldfld, playerLevelsFieldReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldc_I4_8);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Newobj, playerLevelCtorReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Stelem_Ref);
+                    i++;
+
+                    instructions[i] = processor.Create(OpCodes.Ldarg_0);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldfld, playerLevelsFieldReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Ldc_I4_S, ((sbyte) 9));
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Newobj, playerLevelCtorReference);
+                    i++;
+                    instructions[i] = processor.Create(OpCodes.Stelem_Ref);
+                    i++;
+
+
+                    for (i = 0; i < ((int)instructions.Count()); i++)
+                    {
+                        
+                        if (i == 0)
+                        {
+                            processor.InsertAfter(firstInstruction, instructions[0]);
+                        }
+                        else
+                        {
+                            processor.InsertAfter(instructions[i - 1], instructions[i]);
+                        }
+                    }
+
+
+
                 }
                 //else if (method.Name == "FillEndGameStats")
                 //{
